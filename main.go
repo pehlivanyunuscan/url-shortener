@@ -14,12 +14,12 @@ import (
 )
 
 type URL struct {
-	OriginalURL string     `gorm:"not null;unique" json:"original_url"`
-	ShortURL    string     `gorm:"not null;unique" json:"short_url"`
-	CreatedAt   time.Time  `json:"created_at"`
-	ExpiresAt   time.Time  `json:"expires_at"`
-	UsageCount  int        `json:"usage_count"`
-	DeletedAt   *time.Time `json:"deleted_at,omitempty"`
+	OriginalURL string         `gorm:"not null;unique" json:"original_url"`
+	ShortURL    string         `gorm:"not null;unique" json:"short_url"`
+	CreatedAt   time.Time      `json:"created_at"`
+	ExpiresAt   time.Time      `json:"expires_at"`
+	UsageCount  int            `json:"usage_count"`
+	DeletedAt   gorm.DeletedAt `gorm:"index" json:"deleted_at,omitempty"`
 }
 
 var db *gorm.DB // Assume db is initialized and connected to a database
@@ -129,6 +129,25 @@ func main() {
 		return c.JSON(urls)
 	})
 
+	app.Delete("/:shortCode", func(c *fiber.Ctx) error {
+		shortCode := c.Params("shortCode")
+		var url URL
+		if err := db.Where("short_url = ?", shortCode).First(&url).Error; err != nil {
+			return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "URL not found"})
+		}
+
+		now := time.Now().UTC()
+		url.DeletedAt = gorm.DeletedAt{Time: now, Valid: true}
+		if err := db.Save(&url).Error; err != nil {
+			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to delete URL"})
+		}
+
+		// Remove from Redis cache
+		if err := redisClient.Del(ctx, shortCode).Err(); err != nil {
+			log.Println("Failed to delete URL from Redis:", err)
+		}
+		return c.JSON(fiber.Map{"message": "URL deleted successfully"})
+	})
 	app.Listen(":3000")
 }
 
