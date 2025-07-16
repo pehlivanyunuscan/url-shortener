@@ -1,12 +1,14 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"log"
 	"math/rand"
 	"time"
 
 	"github.com/gofiber/fiber/v2"
+	"github.com/redis/go-redis/v9"
 	"gorm.io/driver/postgres"
 	"gorm.io/gorm"
 )
@@ -33,9 +35,27 @@ func initDatabase() {
 	db = database
 }
 
+var redisClient *redis.Client // Assume redisClient is initialized and connected to a Redis server
+var ctx = context.Background()
+
+func initRedis() {
+	// Initialize the Redis connection here
+	redisClient = redis.NewClient(&redis.Options{
+		Addr:     "localhost:6379",
+		Password: "", // no password set
+		DB:       0,  // use default DB
+	})
+	_, err := redisClient.Ping(ctx).Result()
+	if err != nil {
+		log.Fatal("failed to connect to Redis:", err)
+	}
+	fmt.Println("Redis connected successfully")
+}
+
 func main() {
 	app := fiber.New()
 	initDatabase()
+	initRedis()
 
 	app.Post("/shorten", func(c *fiber.Ctx) error {
 		type Request struct {
@@ -67,12 +87,29 @@ func main() {
 		if err := db.Create(&url).Error; err != nil {
 			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to create URL"})
 		}
+		err := redisClient.Set(ctx, shortCode, url.OriginalURL, 24*time.Hour).Err()
+		if err != nil {
+			log.Println("Failed to cache URL in Redis:", err)
+		}
 		return c.JSON(url)
 	})
 
 	app.Get("/:shortCode", func(c *fiber.Ctx) error {
 		shortCode := c.Params("shortCode")
 		var url URL
+
+		originalURL, err := redisClient.Get(ctx, shortCode).Result()
+		if err == redis.Nil {
+			// If not found in Redis, check the database
+			if err := db.Where("short_url = ?", shortCode).First(&url).Error; err != nil {
+				return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "URL not found"})
+			}
+			// Cache the URL in Redis for future requests
+			redisClient.Set(ctx, shortCode, url.OriginalURL, time.Until(url.ExpiresAt))
+			originalURL = url.OriginalURL
+		} else if err != nil {
+			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to fetch URL from Redis"})
+		}
 		if err := db.Where("short_url = ?", shortCode).First(&url).Error; err != nil {
 			return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "URL not found"})
 		}
@@ -80,11 +117,8 @@ func main() {
 			return c.Status(fiber.StatusGone).JSON(fiber.Map{"error": "URL has expired"})
 		}
 
-		url.UsageCount++
-		if err := db.Save(&url).Error; err != nil {
-			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to update usage count"})
-		}
-		return c.Redirect(url.OriginalURL, fiber.StatusTemporaryRedirect)
+		db.Model(&url).Where("short_url = ?", shortCode).Update("usage_count", gorm.Expr("usage_count + ?", 1))
+		return c.Redirect(originalURL, fiber.StatusFound)
 	})
 
 	app.Get("/", func(c *fiber.Ctx) error {
