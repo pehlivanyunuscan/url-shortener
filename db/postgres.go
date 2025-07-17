@@ -3,6 +3,7 @@ package db
 import (
 	"fmt"
 	"log"
+	"os"
 	"yunus/url-shortener/models"
 
 	"gorm.io/driver/postgres"
@@ -10,9 +11,15 @@ import (
 )
 
 var DB *gorm.DB // Assume db is initialized and connected to a database
+
 func InitDatabase() {
 	// Initialize the database connection here
-	dsn := "host=localhost user=urluser dbname=urlshortener password=12345 port=5432 sslmode=disable"
+	host := os.Getenv("DB_HOST") // Get the database host from environment variables
+	user := os.Getenv("DB_USER")
+	password := os.Getenv("DB_PASSWORD")
+	dbname := os.Getenv("DB_NAME")
+	port := os.Getenv("DB_PORT")
+	dsn := fmt.Sprintf("host=%s user=%s dbname=%s password=%s port=%s sslmode=disable", host, user, dbname, password, port)
 	database, err := gorm.Open(postgres.Open(dsn), &gorm.Config{})
 	if err != nil {
 		log.Fatal("failed to connect to the database:", err)
