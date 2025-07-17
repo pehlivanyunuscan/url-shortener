@@ -19,7 +19,7 @@ type URL struct {
 	CreatedAt   time.Time      `json:"created_at"`
 	ExpiresAt   time.Time      `json:"expires_at"`
 	UsageCount  int            `json:"usage_count"`
-	DeletedAt   gorm.DeletedAt `gorm:"index" json:"deleted_at,omitempty"`
+	DeletedAt   gorm.DeletedAt `json:"deleted_at"`
 }
 
 var db *gorm.DB // Assume db is initialized and connected to a database
@@ -136,11 +136,10 @@ func main() {
 			return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "URL not found"})
 		}
 
-		now := time.Now().UTC()
-		url.DeletedAt = gorm.DeletedAt{Time: now, Valid: true}
-		if err := db.Save(&url).Error; err != nil {
-			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to delete URL"})
-		}
+		/*
+			if err := db.Delete(&url).Error; err != nil {
+				return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to delete URL"})
+			}*/
 
 		// Remove from Redis cache
 		if err := redisClient.Del(ctx, shortCode).Err(); err != nil {
