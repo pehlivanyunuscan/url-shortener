@@ -19,6 +19,7 @@ func main() {
 	app.Get("/:shortCode", handlers.RedirectURL)
 	app.Get("/", handlers.ListURL)
 	app.Delete("/:shortCode", handlers.DeleteURL)
+	app.Get("/:shortCode/stats", handlers.StatsURL)
 
 	app.Listen(":3000")
 }

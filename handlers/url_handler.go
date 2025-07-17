@@ -25,7 +25,7 @@ func ShortenURL(c *fiber.Ctx) error {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Original URL is required"})
 	}
 	var existing models.URL
-	if err := db.DB.Where("original_url = ?", req.OriginalURL).First(&existing).Error; err == nil {
+	if err := db.DB.Unscoped().Where("original_url = ?", req.OriginalURL).First(&existing).Error; err == nil {
 		// URL already exists, return the existing short URL
 		return c.JSON(existing)
 	}
@@ -41,13 +41,23 @@ func ShortenURL(c *fiber.Ctx) error {
 	}
 
 	if err := db.DB.Create(&url).Error; err != nil {
+		log.Println("DB Create Error:", err)
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to create URL"})
 	}
 	err := db.RedisClient.Set(db.Ctx, shortCode, url.OriginalURL, 24*time.Hour).Err()
 	if err != nil {
 		log.Println("Failed to cache URL in Redis:", err)
 	}
-	return c.JSON(url)
+
+	response := fiber.Map{
+		"created_at":   url.CreatedAt,
+		"deleted_at":   nil,
+		"original_url": url.OriginalURL,
+		"short_url":    "http://localhost:3000/" + url.ShortURL,
+		"expires_at":   url.ExpiresAt,
+		"usage_count":  url.UsageCount,
+	}
+	return c.JSON(response)
 }
 
 func RedirectURL(c *fiber.Ctx) error {
@@ -101,4 +111,19 @@ func DeleteURL(c *fiber.Ctx) error {
 		log.Println("Failed to delete URL from Redis:", err)
 	}
 	return c.JSON(fiber.Map{"message": "URL deleted successfully"})
+}
+
+func StatsURL(c *fiber.Ctx) error {
+	shortCode := c.Params("shortCode")
+	var url models.URL
+	if err := db.DB.Where("short_url = ?", shortCode).First(&url).Error; err != nil {
+		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "URL not found"})
+	}
+	return c.JSON(fiber.Map{
+		"short_url":    url.ShortURL,
+		"original_url": url.OriginalURL,
+		"usage_count":  url.UsageCount,
+		"created_at":   url.CreatedAt,
+		"expires_at":   url.ExpiresAt,
+	})
 }
