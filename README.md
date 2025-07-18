@@ -57,7 +57,13 @@ This service allows users to shorten long URLs, redirect to original URLs, view 
 
 2. **Start all services (API, PostgreSQL, Redis) with Docker Compose:**
     ```sh
-    docker-compose up --build
+    ./start-docker.sh
+    ```
+
+3. **Run**
+    ```sh
+    source .env
+    go run main.go
     ```
 
 3. **Services**
