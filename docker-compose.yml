@@ -2,14 +2,16 @@ version: "3.8"
 
 services:
   app:
-    build: .
+    build: 
+      context: .
+      network: host
     ports:
       - "3000:3000"
     depends_on:
       - postgres
       - redis
     environment:
-      - DB_HOST=postgres
+      - DB_HOST=localhost
       - DB_PORT=5432
       - DB_USER=urluser
       - DB_PASSWORD=12345
