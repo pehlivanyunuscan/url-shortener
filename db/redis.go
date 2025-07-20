@@ -13,11 +13,14 @@ var RedisClient *redis.Client // Assume redisClient is initialized and connected
 var Ctx = context.Background()
 
 func InitRedis() {
-	// Initialize the Redis connection here
-	addr := os.Getenv("REDIS_ADDR")
+	// Read Redis host and port from environment variables
+	host := os.Getenv("REDIS_HOST")
+	port := os.Getenv("REDIS_PORT")
+	addr := fmt.Sprintf("%s:%s", host, port)
+
 	RedisClient = redis.NewClient(&redis.Options{
 		Addr:     addr,
-		Password: "",
+		Password: "", // Set password here if needed
 		DB:       0,
 	})
 	_, err := RedisClient.Ping(Ctx).Result()
