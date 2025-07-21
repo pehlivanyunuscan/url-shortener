@@ -62,8 +62,7 @@ This service allows users to shorten long URLs, redirect to original URLs, view 
 
 3. **Run**
     ```sh
-    source .env
-    go run main.go
+    docker compose up
     ```
 
 3. **Services**
